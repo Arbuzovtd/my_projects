@@ -1,0 +1,13 @@
+.venv
+__pycache__
+.git
+.pytest_cache
+tests
+*.pyc
+*.pyo
+*.pyd
+.env
+.python-version
+progress.txt
+PRD.md
+# Keep uv.lock and pyproject.toml as they are needed for dependency installation

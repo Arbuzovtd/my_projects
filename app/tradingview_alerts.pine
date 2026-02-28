@@ -1,0 +1,28 @@
+// @version=5
+// ER_MR Strategy v2 SpeedC - Alert Logic
+// This script provides standardized JSON signals for the Python Bot.
+
+// User Inputs for Alerts
+passphrase = input.string("your_secret_passphrase", "Webhook Passphrase")
+
+// Alert JSON Templates
+// These can be used in strategy.entry/close/exit comments or via alert() function.
+
+// 1. Entry Signal Template (Long/Short)
+// Example usage:
+// strategy.entry("Long", strategy.long, comment='{"passphrase":"' + passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"entry", "side":"long", "qty":1}')
+
+// 2. Close All Signal Template
+// Example usage:
+// strategy.close_all(comment='{"passphrase":"' + passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"close_all", "side":"long", "qty":0}')
+
+// Helper function to build the JSON (optional)
+buildSignalJSON(action, side, qty) =>
+    '{"passphrase":"' + passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"' + action + '", "side":"' + side + '", "qty":' + str.tostring(qty) + '}'
+
+// Example of sending an alert manually (if not using strategy comments)
+// if (long_condition)
+//     alert(buildSignalJSON("entry", "long", 1.0), alert.freq_once_per_bar)
+
+// if (exit_condition)
+//     alert(buildSignalJSON("close_all", "long", 0.0), alert.freq_once_per_bar)

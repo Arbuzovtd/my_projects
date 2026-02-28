@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Bot Manager</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --tg-theme-bg-color: #ffffff;
+            --tg-theme-text-color: #222222;
+            --tg-theme-hint-color: #999999;
+            --tg-theme-link-color: #2481cc;
+            --tg-theme-button-color: #2481cc;
+            --tg-theme-button-text-color: #ffffff;
+            --tg-theme-secondary-bg-color: #f0f0f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #222222);
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin: 0;
+            text-align: center;
+        }
+
+        .card {
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .symbol-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        label {
+            font-size: 0.8rem;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+
+        input, select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #222222);
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-active { background-color: #e8f5e9; color: #2e7d32; }
+        .status-paused { background-color: #ffebee; color: #c62828; }
+        .status-paused_for_entries { background-color: #fff3e0; color: #ef6c00; }
+
+        .save-btn {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #loading {
+            text-align: center;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+
+        .error-msg {
+            color: #c62828;
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multiplier Manager</h1>
+    
+    <div class="card">
+        <div class="symbol-header">Add New Symbol</div>
+        <div class="control-group">
+            <label for="new-symbol">Symbol (e.g. BTCUSDT)</label>
+            <input type="text" id="new-symbol" placeholder="BTCUSDT">
+        </div>
+        <div class="control-group">
+            <label for="new-multiplier">Default Multiplier</label>
+            <input type="number" id="new-multiplier" step="0.1" min="0" value="1.0">
+        </div>
+        <button class="save-btn" onclick="addNewSymbol()">Add Symbol</button>
+    </div>
+
+    <div id="loading">Loading configuration...</div>
+    <div id="symbols-container" style="display: none;"></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const symbolsContainer = document.getElementById('symbols-container');
+        const loadingDiv = document.getElementById('loading');
+
+        async function fetchConfig() {
+            try {
+                // We'll point this to the API endpoint which will be added in TASK-011
+                const response = await fetch('/api/config');
+                if (!response.ok) throw new Error('Failed to fetch config');
+                const config = await response.json();
+                renderConfig(config);
+            } catch (error) {
+                loadingDiv.innerText = 'Error loading config: ' + error.message;
+            }
+        }
+
+        function renderConfig(config) {
+            symbolsContainer.innerHTML = '';
+            loadingDiv.style.display = 'none';
+            symbolsContainer.style.display = 'flex';
+            symbolsContainer.style.flexDirection = 'column';
+            symbolsContainer.style.gap = '16px';
+
+            for (const [symbol, settings] of Object.entries(config)) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="symbol-header">
+                        <span>${symbol}</span>
+                        <span class="status-badge status-${settings.status}">${settings.status}</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="status-${symbol}">Status</label>
+                        <select id="status-${symbol}" data-symbol="${symbol}" onchange="updateUIStatus('${symbol}')">
+                            <option value="active" ${settings.status === 'active' ? 'selected' : ''}>Active</option>
+                            <option value="paused" ${settings.status === 'paused' ? 'selected' : ''}>Paused</option>
+                            <option value="paused_for_entries" ${settings.status === 'paused_for_entries' ? 'selected' : ''}>Paused for entries</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="multiplier-${symbol}">Multiplier</label>
+                        <input type="number" id="multiplier-${symbol}" step="0.1" min="0" value="${settings.multiplier}" data-symbol="${symbol}">
+                    </div>
+                    <button class="save-btn" onclick="saveSymbol('${symbol}')">Save Changes</button>
+                `;
+                symbolsContainer.appendChild(card);
+            }
+        }
+
+        function updateUIStatus(symbol) {
+            const select = document.getElementById(`status-${symbol}`);
+            const badge = select.closest('.card').querySelector('.status-badge');
+            badge.className = `status-badge status-${select.value}`;
+            badge.innerText = select.value;
+        }
+
+        async function addNewSymbol() {
+            const symbolInput = document.getElementById('new-symbol');
+            const multiplierInput = document.getElementById('new-multiplier');
+            const symbol = symbolInput.value.trim().toUpperCase();
+            const multiplier = parseFloat(multiplierInput.value);
+
+            if (!symbol) {
+                alert('Please enter a symbol');
+                return;
+            }
+            if (isNaN(multiplier) || multiplier < 0) {
+                alert('Multiplier must be a non-negative number');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/config/${symbol}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'active', multiplier: multiplier })
+                });
+
+                if (!response.ok) throw new Error('Failed to add symbol');
+                
+                symbolInput.value = '';
+                await fetchConfig();
+            } catch (error) {
+                alert('Error adding symbol: ' + error.message);
+            }
+        }
+
+        async function saveSymbol(symbol) {
+            const status = document.getElementById(`status-${symbol}`).value;
+            const multiplier = parseFloat(document.getElementById(`multiplier-${symbol}`).value);
+            const btn = document.querySelector(`button[onclick="saveSymbol('${symbol}')"]`);
+
+            if (isNaN(multiplier) || multiplier < 0) {
+                alert('Multiplier must be a non-negative number');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+
+            try {
+                const response = await fetch(`/api/config/${symbol}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status, multiplier })
+                });
+
+                if (!response.ok) throw new Error('Update failed');
+                
+                tg.showScanQrPopup({ text: "Update Successful!" }); // Just an example UI feedback
+                setTimeout(() => tg.closeScanQrPopup(), 1000);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Save Changes';
+            }
+        }
+
+        // Initialize
+        fetchConfig();
+    </script>
+</body>
+</html>

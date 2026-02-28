@@ -6,3 +6,78 @@
 - Добавлены основные зависимости: FastAPI, pybit, aiogram, pydantic-settings, pytest.
 - Создана виртуальная среда в `.venv`.
 ------------------------
+[DONE] TASK-003: Создание Pydantic схем для валидации Webhook от TradingView.
+- Реализован класс WebhookSignal в app/models/webhook_signal.py.
+- Добавлена валидация полей: passphrase, ticker, action (entry/close_all), side (long/short), qty.
+- Написаны и успешно пройдены юнит-тесты в tests/test_webhook_signal.py.
+------------------------
+[DONE] TASK-004: Создание Pydantic схем для структуры config.json.
+- Реализованы модели SymbolConfig и AppConfig в app/models/config.py.
+- Добавлена валидация статусов (active, paused, paused_for_entries) и мультипликатора (>= 0.0).
+- Созданы и успешно пройдены юнит-тесты в tests/test_config_models.py.
+------------------------
+[DONE] TASK-005: Реализация базового FastAPI сервера с эндпоинтом /webhook и защитой токеном.
+- Создан модуль настроек app/core/settings.py на базе Pydantic-Settings для загрузки WEBHOOK_PASSPHRASE.
+- Написан эндпоинт POST /webhook в app/api/webhook.py, проверяющий токен.
+- Точка входа сервера FastAPI реализована в main.py.
+- Добавлены и успешно пройдены юнит-тесты в tests/test_api_webhook.py.
+------------------------
+[DONE] TASK-006: Инициализация асинхронного клиента Bybit (pybit) с обработкой ошибок API.
+- Настроены Bybit API ключи в app/core/settings.py (API_KEY, API_SECRET, USE_TESTNET).
+- Реализован класс BybitClient в app/services/bybit_service.py для взаимодействия с Bybit API V5.
+- Использована обертка asyncio.to_thread для обеспечения неблокирующей работы синхронного HTTP-клиента pybit.
+- Добавлена базовая обработка ошибок API и логирование.
+- Созданы и успешно пройдены юнит-тесты в tests/test_bybit_service.py.
+------------------------
+[DONE] TASK-007: Реализация механизма Async Lock для потокобезопасной записи в config.json.
+- Добавлена настройка CONFIG_PATH в app/core/settings.py.
+- Реализован сервис ConfigService в app/services/config_service.py для управления конфигурацией.
+- Использован asyncio.Lock для обеспечения потокобезопасности при чтении и записи JSON-файла.
+- Применены обертки asyncio.to_thread для неблокирующего дискового ввода-вывода.
+- Реализованы методы get_config, save_config и update_symbol_config.
+- Написаны и успешно пройдены юнит-тесты в tests/test_config_service.py (включая тест на конкурентные обновления).
+------------------------
+[DONE] TASK-008: Реализована логика Smart Sync.
+- Добавлен SmartSyncService для маппинга сигналов TradingView в ордера Bybit с учетом мультипликатора и состояния символов в конфиге.
+- Интегрирован в /webhook.
+- Написаны и успешно пройдены юнит-тесты в tests/test_smart_sync_service.py.
+------------------------
+[DONE] TASK-009: Настройка Telegram Bot через aiogram 3.x: базовые команды /start и /status.
+- Реализован Telegram бот в app/services/telegram_service.py с использованием aiogram 3.x.
+- Добавлены настройки TELEGRAM_BOT_TOKEN в app/core/settings.py.
+- Реализованы команды:
+  - /start: приветственное сообщение со списком команд.
+  - /status: вывод текущего состояния символов из config.json (статус, мультипликатор).
+- Интегрирован жизненный цикл бота (startup/shutdown) в FastAPI через lifespan в main.py.
+- Написаны и успешно пройдены юнит-тесты в tests/test_telegram_service.py (с использованием моков aiogram).
+------------------------
+- TASK-002: Модификация Pine Script. Создан файл app/tradingview_alerts.pine с шаблонами JSON-сигналов (entry/close_all) и добавлен юнит-тест tests/test_pine_json_format.py для их валидации. Все тесты пройдены успешно.
+------------------------
+[DONE] TASK-013: Настройка логгирования всех входящих сигналов и ответов биржи в файл/консоль.
+- Добавлены настройки LOG_LEVEL и LOG_FILE в app/core/settings.py.
+- Реализован модуль app/core/logging_config.py для централизованной настройки логгирования.
+- Настроены обработчики для вывода в консоль (stdout) и в файл (bot.log).
+- Интегрировано логгирование всех входящих вебхуков в app/api/webhook.py.
+- Улучшено логгирование ответов от Bybit API в app/services/bybit_service.py.
+- Созданы unit-тесты для проверки конфигурации логгирования в tests/test_logging.py.
+- Добавлен tests/conftest.py для глобального патчинга aiogram.Bot в тестах (исправление ошибок коллекции).
+- Все тесты (35/35) пройдены успешно.
+------------------------
+[DONE] TASK-010: Разработка HTML/JS фронтенда для Telegram WebApp (управление мультипликатором).
+- Создана директория app/static и реализован современный index.html с использованием Telegram WebApp SDK.
+- Реализован API эндпоинт GET /api/config для получения текущих настроек символов.
+- Реализован API эндпоинт POST /api/config/{symbol} для обновления мультипликатора и статуса.
+- Настроена раздача статических файлов в FastAPI через StaticFiles.
+- Исправлен ConfigService для поддержки динамического пути к файлу конфигурации в тестах.
+- Добавлены unit-тесты в tests/test_webapp.py для проверки доступности фронтенда и работы API.
+- Все тесты (39/39) пройдены успешно.
+------------------------
+[DONE] TASK-011: Интеграция WebApp с FastAPI для обновления config.json в реальном времени.
+- Реализованы эндпоинты в app/api/config.py для интеграции фронтенда с бэкендом.
+- Обеспечено потокобезопасное обновление конфигурации через ConfigService.
+- Подтверждена корректная работа интеграции через автоматизированные тесты.
+------------------------
+[DONE] TASK-012: Создание Dockerfile на базе uv и docker-compose.yml с монтированием config.json.
+- Создан оптимизированный `Dockerfile` на базе образа `ghcr.io/astral-sh/uv`.
+- Реализован `docker-compose.yml` с поддержкой `.env` и монтированием `config.json` для сохранения состояния.
+- Добавлен `.dockerignore` для исключения лишних файлов из образа.
