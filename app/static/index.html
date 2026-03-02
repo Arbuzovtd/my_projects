@@ -43,6 +43,14 @@
             gap: 12px;
         }
 
+        .section-header {
+            font-weight: bold;
+            font-size: 1.1rem;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 8px;
+            margin-bottom: 4px;
+        }
+
         .symbol-header {
             display: flex;
             justify-content: space-between;
@@ -55,6 +63,12 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
 
         label {
@@ -110,13 +124,41 @@
             font-size: 0.8rem;
             margin-top: 4px;
         }
+
+        .testnet-warning {
+            color: #ef6c00;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <h1>Multiplier Manager</h1>
+    <h1>Trade Bot Settings</h1>
     
+    <!-- Global Settings -->
+    <div class="card" id="global-settings-card">
+        <div class="section-header">Global Settings</div>
+        <div class="control-group">
+            <label for="exchange-id">Exchange</label>
+            <select id="exchange-id">
+                <option value="okx">OKX</option>
+                <option value="bybit">Bybit</option>
+                <option value="binance">Binance</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <div class="row">
+                <input type="checkbox" id="use-testnet">
+                <label for="use-testnet" style="color: var(--tg-theme-text-color); font-size: 1rem;">Use Testnet (Sandbox)</label>
+            </div>
+            <div id="testnet-status" class="testnet-warning"></div>
+        </div>
+        <button class="save-btn" id="save-global-btn" onclick="saveGlobalSettings()">Save Global Settings</button>
+    </div>
+
+    <!-- Add Symbol -->
     <div class="card">
-        <div class="symbol-header">Add New Symbol</div>
+        <div class="section-header">Add New Symbol</div>
         <div class="control-group">
             <label for="new-symbol">Symbol (e.g. BTCUSDT)</label>
             <input type="text" id="new-symbol" placeholder="BTCUSDT">
@@ -124,6 +166,10 @@
         <div class="control-group">
             <label for="new-multiplier">Default Multiplier</label>
             <input type="number" id="new-multiplier" step="0.1" min="0" value="1.0">
+        </div>
+        <div class="control-group">
+            <label for="new-leverage">Default Leverage (1-125)</label>
+            <input type="number" id="new-leverage" step="1" min="1" max="125" value="1">
         </div>
         <button class="save-btn" onclick="addNewSymbol()">Add Symbol</button>
     </div>
@@ -137,27 +183,53 @@
 
         const symbolsContainer = document.getElementById('symbols-container');
         const loadingDiv = document.getElementById('loading');
+        const exchangeSelect = document.getElementById('exchange-id');
+        const testnetCheckbox = document.getElementById('use-testnet');
+        const testnetStatus = document.getElementById('testnet-status');
 
         async function fetchConfig() {
             try {
-                // We'll point this to the API endpoint which will be added in TASK-011
                 const response = await fetch('/api/config');
                 if (!response.ok) throw new Error('Failed to fetch config');
                 const config = await response.json();
-                renderConfig(config);
+                
+                // Update Global Settings UI
+                exchangeSelect.value = config.settings.exchange_id;
+                testnetCheckbox.checked = config.settings.use_testnet;
+                updateTestnetWarning();
+                
+                renderSymbols(config.symbols);
             } catch (error) {
                 loadingDiv.innerText = 'Error loading config: ' + error.message;
             }
         }
 
-        function renderConfig(config) {
+        function updateTestnetWarning() {
+            if (testnetCheckbox.checked) {
+                testnetStatus.innerText = "⚠️ TRADING ON TESTNET (PAPER MONEY)";
+                testnetStatus.style.color = "#2e7d32";
+            } else {
+                testnetStatus.innerText = "🔥 REAL MONEY TRADING ACTIVE";
+                testnetStatus.style.color = "#c62828";
+            }
+        }
+
+        testnetCheckbox.onchange = updateTestnetWarning;
+
+        function renderSymbols(symbols) {
             symbolsContainer.innerHTML = '';
             loadingDiv.style.display = 'none';
             symbolsContainer.style.display = 'flex';
             symbolsContainer.style.flexDirection = 'column';
             symbolsContainer.style.gap = '16px';
 
-            for (const [symbol, settings] of Object.entries(config)) {
+            const symbolEntries = Object.entries(symbols);
+            if (symbolEntries.length === 0) {
+                symbolsContainer.innerHTML = '<div style="text-align:center; color:gray;">No symbols configured.</div>';
+                return;
+            }
+
+            for (const [symbol, settings] of symbolEntries) {
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.innerHTML = `
@@ -177,7 +249,11 @@
                         <label for="multiplier-${symbol}">Multiplier</label>
                         <input type="number" id="multiplier-${symbol}" step="0.1" min="0" value="${settings.multiplier}" data-symbol="${symbol}">
                     </div>
-                    <button class="save-btn" onclick="saveSymbol('${symbol}')">Save Changes</button>
+                    <div class="control-group">
+                        <label for="leverage-${symbol}">Leverage</label>
+                        <input type="number" id="leverage-${symbol}" step="1" min="1" max="125" value="${settings.leverage || 1}" data-symbol="${symbol}">
+                    </div>
+                    <button class="save-btn" onclick="saveSymbol('${symbol}')">Save Symbol Changes</button>
                 `;
                 symbolsContainer.appendChild(card);
             }
@@ -190,11 +266,39 @@
             badge.innerText = select.value;
         }
 
+        async function saveGlobalSettings() {
+            const btn = document.getElementById('save-global-btn');
+            const data = {
+                exchange_id: exchangeSelect.value,
+                use_testnet: testnetCheckbox.checked
+            };
+
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+
+            try {
+                const response = await fetch('/api/config/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!response.ok) throw new Error('Failed to save settings');
+                alert('Global settings saved! Bot will restart client on next signal.');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Save Global Settings';
+            }
+        }
+
         async function addNewSymbol() {
             const symbolInput = document.getElementById('new-symbol');
             const multiplierInput = document.getElementById('new-multiplier');
+            const leverageInput = document.getElementById('new-leverage');
             const symbol = symbolInput.value.trim().toUpperCase();
             const multiplier = parseFloat(multiplierInput.value);
+            const leverage = parseInt(leverageInput.value);
 
             if (!symbol) {
                 alert('Please enter a symbol');
@@ -206,10 +310,10 @@
             }
 
             try {
-                const response = await fetch(`/api/config/${symbol}`, {
+                const response = await fetch(`/api/config/symbols/${symbol}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'active', multiplier: multiplier })
+                    body: JSON.stringify({ status: 'active', multiplier: multiplier, leverage: leverage })
                 });
 
                 if (!response.ok) throw new Error('Failed to add symbol');
@@ -224,6 +328,7 @@
         async function saveSymbol(symbol) {
             const status = document.getElementById(`status-${symbol}`).value;
             const multiplier = parseFloat(document.getElementById(`multiplier-${symbol}`).value);
+            const leverage = parseInt(document.getElementById(`leverage-${symbol}`).value);
             const btn = document.querySelector(`button[onclick="saveSymbol('${symbol}')"]`);
 
             if (isNaN(multiplier) || multiplier < 0) {
@@ -235,21 +340,18 @@
             btn.innerText = 'Saving...';
 
             try {
-                const response = await fetch(`/api/config/${symbol}`, {
+                const response = await fetch(`/api/config/symbols/${symbol}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status, multiplier })
+                    body: JSON.stringify({ status, multiplier, leverage })
                 });
 
                 if (!response.ok) throw new Error('Update failed');
-                
-                tg.showScanQrPopup({ text: "Update Successful!" }); // Just an example UI feedback
-                setTimeout(() => tg.closeScanQrPopup(), 1000);
             } catch (error) {
                 alert('Error: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Save Changes';
+                btn.innerText = 'Save Symbol Changes';
             }
         }
 

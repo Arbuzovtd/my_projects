@@ -28,7 +28,7 @@ async def cmd_start(message: types.Message):
     )
 
     welcome_text = (
-        f"👋 Привет! Я торговый робот для {settings.EXCHANGE_ID.upper()}.\n\n"
+        f"👋 Привет! Я торговый робот.\n\n"
         f"Ваш Chat ID: {hcode(str(message.chat.id))}\n"
         f"Добавьте его в .env как {hcode('TELEGRAM_CHAT_ID')}, чтобы получать уведомления.\n\n"
         f"Нажми кнопку ниже, чтобы управлять настройками через Web App.\n"
@@ -58,17 +58,23 @@ async def cmd_status(message: types.Message):
     """
     try:
         config = await config_service.get_config()
-        if not config.root:
+        if not config.symbols:
             await message.answer("⚠️ Конфигурация пуста или не загружена.")
             return
 
-        status_lines = [hbold("📈 Текущий статус робота:")]
-        for symbol, data in config.root.items():
+        status_lines = [
+            hbold("📈 Текущий статус робота:"),
+            f"Биржа: {hcode(config.settings.exchange_id.upper())}",
+            f"Режим: {hcode('TESTNET' if config.settings.use_testnet else 'REAL MONEY')}\n"
+        ]
+        
+        for symbol, data in config.symbols.items():
             status_emoji = "🟢" if data.status == "active" else "🟠" if data.status == "paused_for_entries" else "🔴"
             status_lines.append(
-                f"\n{status_emoji} {hbold(symbol)}:\n"
+                f"{status_emoji} {hbold(symbol)}:\n"
                 f"   Статус: {hcode(data.status)}\n"
-                f"   Мультипликатор: {hcode(str(data.multiplier))}"
+                f"   Мультипликатор: {hcode(str(data.multiplier))}\n"
+                f"   Плечо: {hcode(str(data.leverage))}x\n"
             )
         
         await message.answer("\n".join(status_lines), parse_mode="HTML")
@@ -81,7 +87,10 @@ async def start_bot():
     Start the bot polling.
     """
     logger.info("Starting Telegram Bot...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.error(f"Telegram Bot Polling Error: {e}")
 
 async def stop_bot():
     """

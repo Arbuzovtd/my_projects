@@ -35,6 +35,6 @@ app.include_router(config_router)
 # Mount static files for the Telegram WebApp
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/")
-async def root():
-    return {"message": "Hello from test-auto-dev FastAPI server"}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

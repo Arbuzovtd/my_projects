@@ -34,10 +34,9 @@ async def test_process_signal_symbol_not_in_config(smart_sync_service):
 async def test_process_signal_symbol_paused(smart_sync_service):
     # Mocking config service to return paused config
     with patch("app.services.smart_sync_service.config_service.get_config", new_callable=AsyncMock) as mock_get_config:
-        mock_get_config.return_value = AppConfig(root={
+        mock_get_config.return_value = AppConfig(symbols={
             "BTCUSDT": SymbolConfig(status="paused", multiplier=10.0)
         })
-        
         signal = WebhookSignal(
             passphrase="pass",
             ticker="BTCUSDT",
@@ -58,9 +57,10 @@ async def test_handle_entry_success(smart_sync_service):
         patch("app.services.smart_sync_service.exchange_service.create_market_order", new_callable=AsyncMock) as mock_create_order,
         patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock) as mock_send_message
     ):
-        mock_get_config.return_value = AppConfig(root={
+        mock_get_config.return_value = AppConfig(symbols={
             "BTCUSDT": SymbolConfig(status="active", multiplier=10.0)
         })
+
         mock_create_order.return_value = {"retCode": 0, "result": {"id": "12345"}}
         
         signal = WebhookSignal(
@@ -92,9 +92,10 @@ async def test_handle_close_all_success(smart_sync_service):
         patch("app.services.smart_sync_service.exchange_service.create_market_order", new_callable=AsyncMock) as mock_create_order,
         patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock) as mock_send_message
     ):
-        mock_get_config.return_value = AppConfig(root={
+        mock_get_config.return_value = AppConfig(symbols={
             "BTCUSDT": SymbolConfig(status="active", multiplier=10.0)
         })
+
         mock_get_positions.return_value = {
             "retCode": 0,
             "result": {

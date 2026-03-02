@@ -2,7 +2,7 @@ import json
 import asyncio
 import logging
 from typing import Optional, Dict, Any
-from app.models.config import AppConfig, SymbolConfig
+from app.models.config import AppConfig, SymbolConfig, GlobalSettings
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -36,22 +36,39 @@ class ConfigService:
         """
         async with self._lock:
             config = await self._read_config_internal()
-            config.root[symbol] = symbol_config
+            config.symbols[symbol] = symbol_config
             await self._write_config_internal(config)
             logger.info(f"Symbol config for {symbol} updated and saved.")
 
+    async def update_global_settings(self, global_settings: GlobalSettings):
+        """
+        Updates global settings using an async lock.
+        """
+        async with self._lock:
+            config = await self._read_config_internal()
+            config.settings = global_settings
+            await self._write_config_internal(config)
+            logger.info("Global settings updated and saved.")
+
     async def _read_config_internal(self) -> AppConfig:
         """
-        Internal method to read config file. Not thread-safe on its own.
+        Internal method to read config file. Handles migration from old RootModel format.
         """
         try:
             data = await asyncio.to_thread(self._read_file_sync)
             if data is None:
-                return AppConfig(root={})
+                return AppConfig()
+            
+            # Migration logic
+            if "symbols" not in data and "settings" not in data:
+                # Old format was just RootModel[Dict[str, SymbolConfig]]
+                logger.info("Migrating old config format...")
+                return AppConfig(symbols=data)
+            
             return AppConfig.model_validate(data)
         except Exception as e:
             logger.error(f"Error reading config internal: {e}")
-            return AppConfig(root={})
+            return AppConfig()
 
     async def _write_config_internal(self, config: AppConfig):
         """

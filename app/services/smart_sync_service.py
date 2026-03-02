@@ -11,7 +11,7 @@ class SmartSyncService:
     async def process_signal(self, signal: WebhookSignal):
         symbol = signal.ticker
         config = await config_service.get_config()
-        symbol_config = config.root.get(symbol)
+        symbol_config = config.symbols.get(symbol)
         
         if not symbol_config:
             msg = f"⚠️ Symbol {symbol} not found in config. Ignoring signal."
@@ -24,13 +24,13 @@ class SmartSyncService:
             return {"status": "ignored", "reason": "Paused"}
         
         if signal.action == "entry":
-            return await self._handle_entry(signal, symbol_config.multiplier)
+            return await self._handle_entry(signal, symbol_config.multiplier, symbol_config.leverage)
         elif signal.action == "close_all":
             return await self._handle_close_all(signal)
         
         return {"status": "error", "reason": "Unknown action"}
 
-    async def _handle_entry(self, signal: WebhookSignal, multiplier: float):
+    async def _handle_entry(self, signal: WebhookSignal, multiplier: float, leverage: int):
         symbol = signal.ticker
         side = "buy" if signal.side == "long" else "sell"
         qty = signal.qty * multiplier
@@ -38,6 +38,9 @@ class SmartSyncService:
         if qty <= 0:
             logger.warning(f"Calculated quantity is {qty} for {symbol}. Ignoring.")
             return {"status": "ignored", "reason": "Zero quantity"}
+
+        # Set leverage first
+        await exchange_service.set_leverage(symbol, leverage)
 
         logger.info(f"CCXT: Placing entry order for {symbol}: side={side}, qty={qty}")
         
