@@ -1,10 +1,20 @@
 //@version=6
-strategy("ER_MR Strategy v2 SpeedC", shorttitle="ER_MR_v2_SC", overlay=true, 
+strategy("ER_MR Strategy v2 SpeedC + Webhook", shorttitle="ER_MR_v2_SC_WEB", overlay=true, 
      default_qty_type=strategy.fixed, default_qty_value=1,
      initial_capital=2000000, currency=currency.USD,
      commission_type=strategy.commission.percent, commission_value=0.05,
      pyramiding=20, process_orders_on_close=true,
      calc_on_every_tick=false)
+
+// ========== WEBHOOK SETTINGS ==========
+webhook_passphrase = input.string("your_passphrase", "Webhook Passphrase", group="🚀 Webhook Settings")
+
+get_entry_alert(string side, float q) =>
+    '{"passphrase":"' + webhook_passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"entry", "side":"' + side + '", "qty":' + str.tostring(q) + '}'
+
+get_close_alert(int side) =>
+    s = side == 1 ? "long" : "short"
+    '{"passphrase":"' + webhook_passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"close_all", "side":"' + s + '", "qty":0}'
 
 // ========== INPUTS ==========
 vwap_source = input.source(hlc3, title="VWAP Source", group="VWAP")
@@ -188,7 +198,7 @@ calc_retrace(float dev) =>
 if is_new_week
     if pos_side != 0
         float net_pnl = (pos_side == 1 ? (close - pos_avg) * pos_size : (pos_avg - close) * pos_size) - calc_comm(pos_avg, close, pos_size)
-        strategy.close_all(comment="WFC $" + str.tostring(net_pnl, "#.#"))
+        strategy.close_all(comment="WFC $" + str.tostring(net_pnl, "#.#"), alert_message=get_close_alert(pos_side))
     
     mr_blocked := false
     pos_side  := 0
@@ -331,7 +341,7 @@ if pos_side != 0 and not is_new_week
     // SL
     if (pos_side == 1 and cr_sl_long) or (pos_side == -1 and cr_sl_short)
         float net_pnl = (pos_side == 1 ? (close - pos_avg) * pos_size : (pos_avg - close) * pos_size) - calc_comm(pos_avg, close, pos_size)
-        strategy.close_all(comment="SL $" + str.tostring(net_pnl, "#.#"))
+        strategy.close_all(comment="SL $" + str.tostring(net_pnl, "#.#"), alert_message=get_close_alert(pos_side))
         pos_side    := 0
         pos_avg     := 0.0
         pos_size    := 0.0
@@ -342,7 +352,7 @@ if pos_side != 0 and not is_new_week
     // TP
     if not exit_triggered and ((pos_side == 1 and cr_tp_long) or (pos_side == -1 and cr_tp_short))
         float net_pnl = (pos_side == 1 ? (close - pos_avg) * pos_size : (pos_avg - close) * pos_size) - calc_comm(pos_avg, close, pos_size)
-        strategy.close_all(comment="TP $" + str.tostring(net_pnl, "#.#"))
+        strategy.close_all(comment="TP $" + str.tostring(net_pnl, "#.#"), alert_message=get_close_alert(pos_side))
         pos_side    := 0
         pos_avg     := 0.0
         pos_size    := 0.0
@@ -368,7 +378,7 @@ if pos_side != 0 and not is_new_week
     // FC
     if not exit_triggered and is_fc_time
         float net_pnl = (pos_side == 1 ? (close - pos_avg) * pos_size : (pos_avg - close) * pos_size) - calc_comm(pos_avg, close, pos_size)
-        strategy.close_all(comment="FC $" + str.tostring(net_pnl, "#.#"))
+        strategy.close_all(comment="FC $" + str.tostring(net_pnl, "#.#"), alert_message=get_close_alert(pos_side))
         pos_side    := 0
         pos_avg     := 0.0
         pos_size    := 0.0
@@ -449,7 +459,7 @@ if can_open_new and cr_barrier_long and pos_side >= 0
                 string boost_tag = lwb_active and max_dev_dn >= lwb_min_dev and (lwb_max_dev == 0 or max_dev_dn <= lwb_max_dev) ? "🚀" : ""
                 float new_avg = pos_side == 0 ? close : (pos_avg * pos_size + close * add) / (pos_size + add)
                 float new_size = pos_side == 0 ? add : pos_size + add
-                strategy.entry("Long", strategy.long, qty=add, comment="L#" + str.tostring(entry_count + 1) + boost_tag + " +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"))
+                strategy.entry("Long", strategy.long, qty=add, comment="L#" + str.tostring(entry_count + 1) + boost_tag + " +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"), alert_message=get_entry_alert("long", add))
                 pos_avg  := new_avg
                 pos_size := new_size
                 pos_side := 1
@@ -470,7 +480,7 @@ if can_open_new and not entry_triggered and pos_side >= 0 and dr_enabled and dr_
             string boost_tag_p = lwb_active and max_dev_dn >= lwb_min_dev and (lwb_max_dev == 0 or max_dev_dn <= lwb_max_dev) ? "🚀" : ""
             float new_avg = pos_side == 0 ? close : (pos_avg * pos_size + close * add) / (pos_size + add)
             float new_size = pos_side == 0 ? add : pos_size + add
-            strategy.entry("Long", strategy.long, qty=add, comment="L#" + str.tostring(entry_count + 1) + boost_tag_p + " DR⏱ +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"))
+            strategy.entry("Long", strategy.long, qty=add, comment="L#" + str.tostring(entry_count + 1) + boost_tag_p + " DR⏱ +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"), alert_message=get_entry_alert("long", add))
             pos_avg  := new_avg
             pos_size := new_size
             pos_side := 1
@@ -509,7 +519,7 @@ if can_open_new and cr_barrier_short and pos_side <= 0 and not entry_triggered
                 string boost_tag2 = lwb_active and max_dev_up >= lwb_min_dev and (lwb_max_dev == 0 or max_dev_up <= lwb_max_dev) ? "🚀" : ""
                 float new_avg = pos_side == 0 ? close : (pos_avg * pos_size + close * add) / (pos_size + add)
                 float new_size = pos_side == 0 ? add : pos_size + add
-                strategy.entry("Short", strategy.short, qty=add, comment="S#" + str.tostring(entry_count + 1) + boost_tag2 + " +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"))
+                strategy.entry("Short", strategy.short, qty=add, comment="S#" + str.tostring(entry_count + 1) + boost_tag2 + " +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"), alert_message=get_entry_alert("short", add))
                 pos_avg  := new_avg
                 pos_size := new_size
                 pos_side := -1
@@ -530,7 +540,7 @@ if can_open_new and not entry_triggered and pos_side <= 0 and dr_enabled and dr_
             string boost_tag_p2 = lwb_active and max_dev_up >= lwb_min_dev and (lwb_max_dev == 0 or max_dev_up <= lwb_max_dev) ? "🚀" : ""
             float new_avg = pos_side == 0 ? close : (pos_avg * pos_size + close * add) / (pos_size + add)
             float new_size = pos_side == 0 ? add : pos_size + add
-            strategy.entry("Short", strategy.short, qty=add, comment="S#" + str.tostring(entry_count + 1) + boost_tag_p2 + " DR⏱ +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"))
+            strategy.entry("Short", strategy.short, qty=add, comment="S#" + str.tostring(entry_count + 1) + boost_tag_p2 + " DR⏱ +" + str.tostring(add, "#.#") + " $" + str.tostring(close, "#.#"), alert_message=get_entry_alert("short", add))
             pos_avg  := new_avg
             pos_size := new_size
             pos_side := -1

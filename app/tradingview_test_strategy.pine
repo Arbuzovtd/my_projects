@@ -1,0 +1,26 @@
+//@version=6
+strategy("Test Connection Bot (Fast Signals)", overlay=true, 
+     default_qty_type=strategy.fixed, default_qty_value=0.01)
+
+// ========== WEBHOOK SETTINGS ==========
+webhook_passphrase = input.string("your_passphrase", "Webhook Passphrase", group="🚀 Webhook Settings")
+
+get_entry_alert(string side, float q) =>
+    '{"passphrase":"' + webhook_passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"entry", "side":"' + side + '", "qty":' + str.tostring(q) + '}'
+
+get_close_alert() =>
+    '{"passphrase":"' + webhook_passphrase + '", "ticker":"' + syminfo.ticker + '", "action":"close_all", "side":"long", "qty":0}'
+
+// ========== ТЕСТОВАЯ ЛОГИКА (КАЖДЫЕ 2 БАРА) ==========
+// Входим на четных барах, выходим на нечетных
+is_entry_bar = bar_index % 2 == 0
+
+if (is_entry_bar)
+    strategy.entry("TestOrder", strategy.long, qty=0.01, comment="TEST ENTRY", alert_message=get_entry_alert("long", 0.01))
+
+if (not is_entry_bar)
+    strategy.close_all(comment="TEST CLOSE", alert_message=get_close_alert())
+
+// Визуализация для контроля на графике
+plotshape(is_entry_bar, title="Entry Signal", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.small)
+plotshape(not is_entry_bar, title="Exit Signal", location=location.abovebar, color=color.red, style=shape.triangledown, size=size.small)

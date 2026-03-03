@@ -47,7 +47,8 @@ class SmartSyncService:
         response = await exchange_service.create_market_order(
             symbol=symbol,
             side=side,
-            amount=qty
+            amount=qty,
+            params={"recvWindow": 60000} # Increased window for entry orders
         )
         
         if response.get("retCode") == 0:

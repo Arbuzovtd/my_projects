@@ -36,7 +36,11 @@ class ExchangeService:
             # Common configuration
             client_config = {
                 'enableRateLimit': True,
-                'options': {'defaultType': 'swap' if self.exchange_id == 'okx' else 'future'}
+                'options': {
+                    'defaultType': 'swap',
+                    'adjustForTimeDifference': True,
+                    'recvWindow': 60000
+                }
             }
             
             # Select credentials based on exchange
@@ -115,6 +119,13 @@ class ExchangeService:
         """
         Maps simple symbols like 'BTCUSDT' to CCXT format.
         """
+        if not symbol:
+            return symbol
+            
+        # Strip .P suffix (TradingView Perpetual)
+        if symbol.endswith(".P"):
+            symbol = symbol.replace(".P", "")
+            
         if "/" in symbol or "-" in symbol:
             return symbol
         
@@ -123,10 +134,7 @@ class ExchangeService:
                 base = symbol.replace("USDT", "")
                 return f"{base}-USDT-SWAP"
         
-        if symbol.endswith("USDT"):
-            base = symbol.replace("USDT", "")
-            return f"{base}/USDT:USDT"
-        
+        # For Bybit and others, standard ETHUSDT usually works best with defaultType='swap'
         return symbol
 
 exchange_service = ExchangeService()
