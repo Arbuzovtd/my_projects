@@ -8,7 +8,8 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
-      - .:/app
+      # We mount only persistent data files. 
+      # Code is already inside the image thanks to COPY . . in Dockerfile.
       - ./config.json:/app/config.json
       - ./config.db:/app/config.db
       - ./bot.log:/app/bot.log

@@ -7,7 +7,15 @@ tests
 *.pyo
 *.pyd
 .env
+.env.*
 .python-version
 progress.txt
 PRD.md
+bot.log
+config.json
+config.db
+tasks.json
+README.md
+Dockerfile
+docker-compose.yml
 # Keep uv.lock and pyproject.toml as they are needed for dependency installation
