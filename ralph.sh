@@ -1,33 +1,27 @@
 #!/bin/bash
 
-# Ограничение итераций для безопасности
-MAX_ITERATIONS=5
-ITERATION=0
+echo "🚀 Starting Trading Bot Deployment..."
 
-echo "🚀 Запуск автономного цикла выполнения задач (Ralph Loop)..."
+# 1. Проверяем наличие необходимых файлов
+if [ ! -f .env ]; then
+    echo "❌ Error: .env file not found! Please create it from .env.example"
+    exit 1
+fi
 
-while [ $ITERATION -lt $MAX_ITERATIONS ]; do
-    echo "--- Итерация $((ITERATION + 1)) из $MAX_ITERATIONS ---"
-    
-    # Строгий промпт для агента
-    PROMPT="Прочитай tasks.json. Найди самую приоритетную задачу, которая не заблокирована (статус не 'done' и все зависимости выполнены). Выполни её: напиши код, напиши юнит-тесты и проверь, что они зеленые. Затем допиши (append) краткий отчет о сделанном в progress.txt и обнови статус этой задачи в tasks.json на 'done'."
+if [ ! -f config.json ]; then
+    echo "📝 Initializing empty config.json..."
+    echo '{"settings": {"exchange_id": "bybit", "use_testnet": false}, "symbols": {}}' > config.json
+fi
 
-    # Вызов Gemini CLI для выполнения одной задачи
-    # Мы используем 'gemini-cli' (или 'gemini' в зависимости от алиаса в системе)
-    # Примечание: В контексте данного чата я сам являюсь этим агентом, 
-    # но скрипт предназначен для запуска в терминале.
-    
-    gemini "$PROMPT"
-    
-    # Проверка кода возврата (опционально)
-    if [ $? -ne 0 ]; then
-        echo "⚠️ Произошла ошибка при выполнении задачи или задачи закончились."
-        break
-    fi
+# 2. Создаем пустой файл БД, чтобы Docker правильно его примонтировал
+touch config.db
+touch bot.log
 
-    ITERATION=$((ITERATION + 1))
-    echo "✅ Итерация завершена."
-    sleep 2
-done
+# 3. Пересобираем и запускаем контейнеры
+echo "📦 Building and starting containers..."
+docker compose down
+docker compose up -d --build
 
-echo "🏁 Цикл завершен. Проверьте progress.txt и tasks.json."
+echo "✅ Deployment finished! Bot is running in background."
+echo "📜 To see logs: docker compose logs -f"
+echo "🛠 To stop bot: docker compose down"

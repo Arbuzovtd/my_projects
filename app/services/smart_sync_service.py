@@ -3,6 +3,7 @@ from typing import Optional
 from app.models.webhook_signal import WebhookSignal
 from app.services.exchange_service import exchange_service
 from app.services.config_service import config_service
+from app.services.trade_service import trade_service
 from app.services.telegram_service import send_message
 
 logger = logging.getLogger(__name__)
@@ -48,14 +49,33 @@ class SmartSyncService:
             symbol=symbol,
             side=side,
             amount=qty,
-            params={"recvWindow": 60000} # Increased window for entry orders
+            params={"recvWindow": 60000}
         )
         
         if response.get("retCode") == 0:
             order_data = response.get("result", {})
-            logger.info(f"CCXT: Order placed successfully: {order_data.get('id')}")
-            await send_message(f"✅ Order placed for {symbol}: {side} {qty}")
-            return {"status": "success", "order_id": order_data.get('id')}
+            order_id = order_data.get('id')
+            
+            # Get current price to record in DB (or price from order if available)
+            # Market orders usually return 'price' as None or 0 in some exchanges until filled
+            execution_price = order_data.get('price') or order_data.get('average')
+            
+            if not execution_price:
+                ticker = await exchange_service.get_ticker(symbol)
+                execution_price = ticker.get('last') if ticker else 0
+
+            # Record in Database
+            await trade_service.record_entry(
+                symbol=symbol,
+                side=signal.side,
+                price=execution_price,
+                quantity=qty,
+                order_id=order_id
+            )
+
+            logger.info(f"CCXT: Order placed successfully: {order_id} at {execution_price}")
+            await send_message(f"✅ Order placed for {symbol}: {side} {qty} @ {execution_price}")
+            return {"status": "success", "order_id": order_id}
         else:
             reason = response.get("retMsg")
             logger.error(f"CCXT: Failed to place order: {reason}")
@@ -64,53 +84,57 @@ class SmartSyncService:
 
     async def _handle_close_all(self, signal: WebhookSignal):
         symbol = signal.ticker
-        positions_response = await exchange_service.get_positions(symbol=symbol)
         
-        if positions_response.get("retCode") != 0:
-            reason = positions_response.get("retMsg")
-            logger.error(f"CCXT: Failed to get positions: {reason}")
-            await send_message(f"❌ Failed to get positions for {symbol}: {reason}")
-            return {"status": "error", "reason": reason}
+        # 1. Check our database first for active position
+        position = await trade_service.get_active_position(symbol)
         
-        results = []
-        positions = positions_response.get("result", {}).get("list", [])
+        if not position:
+            msg = f"ℹ️ No active position for {symbol} found in DB. Nothing to close."
+            logger.info(msg)
+            # Optional: Fallback to exchange check if you want to be extra sure
+            # But according to user request, we want to avoid "close all" by mistake.
+            return {"status": "success", "message": "No tracked position found"}
+
+        # 2. Match signal side to position side
+        if signal.side != position.side:
+            logger.warning(f"Close signal for {signal.side} but DB says position is {position.side}. Ignoring.")
+            return {"status": "ignored", "reason": "Side mismatch"}
+
+        # 3. Close the tracked quantity
+        close_side = "sell" if position.side == "long" else "buy"
+        pos_size = position.total_quantity
         
-        for pos in positions:
-            # CCXT position structure: 'side' is 'long'/'short', 'contracts' is size
-            pos_side = pos.get("side") # 'long' or 'short'
-            pos_size = float(pos.get("contracts", 0))
+        logger.info(f"CCXT: Closing tracked position for {symbol}: {position.side} {pos_size}")
+        
+        resp = await exchange_service.create_market_order(
+            symbol=symbol,
+            side=close_side,
+            amount=pos_size,
+            params={"reduceOnly": True, "recvWindow": 60000}
+        )
+        
+        if resp.get("retCode") == 0:
+            order_data = resp.get("result", {})
+            exit_price = order_data.get('price') or order_data.get('average')
             
-            if pos_size == 0:
-                continue
-            
-            # Match signal side to position side
-            should_close = (
-                (signal.side == "long" and pos_side == "long") or
-                (signal.side == "short" and pos_side == "short")
+            if not exit_price:
+                ticker = await exchange_service.get_ticker(symbol)
+                exit_price = ticker.get('last') if ticker else 0
+                
+            # Update Database
+            closed_pos = await trade_service.record_close(
+                symbol=symbol,
+                exit_price=exit_price,
+                exit_reason="exit_signal"
             )
             
-            if should_close:
-                # Opposite side to close
-                close_side = "sell" if pos_side == "long" else "buy"
-                logger.info(f"CCXT: Closing position for {symbol}: {pos_side} {pos_size}")
-                
-                resp = await exchange_service.create_market_order(
-                    symbol=symbol,
-                    side=close_side,
-                    amount=pos_size,
-                    params={"reduceOnly": True}
-                )
-                results.append(resp)
-                
-                if resp.get("retCode") == 0:
-                    await send_message(f"✅ Position closed for {symbol}: {pos_side} {pos_size}")
-                else:
-                    await send_message(f"❌ Failed to close {pos_side} position for {symbol}: {resp.get('retMsg')}")
-        
-        if not results:
-            logger.info(f"CCXT: No open {signal.side} positions found to close for {symbol}")
-            return {"status": "success", "message": "No positions to close"}
-        
-        return {"status": "success", "results": results}
+            pnl_msg = f" (PnL: {closed_pos.total_pnl_usdt:.2f} USDT)" if closed_pos else ""
+            await send_message(f"✅ Position closed for {symbol}: {position.side} {pos_size} @ {exit_price}{pnl_msg}")
+            return {"status": "success", "pnl": closed_pos.total_pnl_usdt if closed_pos else 0}
+        else:
+            reason = resp.get("retMsg")
+            logger.error(f"❌ Failed to close {position.side} position for {symbol}: {reason}")
+            await send_message(f"❌ Failed to close position for {symbol}: {reason}")
+            return {"status": "error", "reason": reason}
 
 smart_sync_service = SmartSyncService()

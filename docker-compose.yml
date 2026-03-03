@@ -1,10 +1,19 @@
 services:
-  app:
+  trading-bot:
     build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./config.json:/app/config.json
+    container_name: trading-bot
+    restart: unless-stopped
     env_file:
       - .env
-    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - ./config.json:/app/config.json
+      - ./config.db:/app/config.db
+      - ./bot.log:/app/bot.log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10mb"
+        max-file: "3"

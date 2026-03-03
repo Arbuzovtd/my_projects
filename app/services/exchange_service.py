@@ -87,6 +87,15 @@ class ExchangeService:
             logger.error(f"CCXT {self.exchange_id} API Error setting leverage: {e}")
             return None
 
+    async def get_ticker(self, symbol: str):
+        client = await self._get_client()
+        ccxt_symbol = self._map_symbol(symbol)
+        try:
+            return await client.fetch_ticker(ccxt_symbol)
+        except Exception as e:
+            logger.error(f"CCXT {self.exchange_id} API Error fetching ticker: {e}")
+            return None
+
     async def create_market_order(self, symbol: str, side: str, amount: float, params: dict = None):
         client = await self._get_client()
         ccxt_symbol = self._map_symbol(symbol)

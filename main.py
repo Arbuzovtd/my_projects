@@ -7,6 +7,7 @@ from app.api.webhook import router as webhook_router
 from app.api.config import router as config_router
 from app.services.telegram_service import start_bot, stop_bot
 from app.core.logging_config import setup_logging
+from app.db.session import init_db
 
 # Initialize logging before creating the app
 setup_logging()
@@ -15,6 +16,13 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up Trade Bot application...")
+    # Initialize Database
+    try:
+        await init_db()
+        logger.info("Database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
     # Startup: Start Telegram bot as a background task
     bot_task = asyncio.create_task(start_bot())
     yield
