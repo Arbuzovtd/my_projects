@@ -17,6 +17,15 @@ class TradeService:
             )
             return result.scalar_one_or_none()
 
+    async def get_all_active_positions(self) -> list[TradePosition]:
+        async with async_session() as session:
+            result = await session.execute(
+                select(TradePosition)
+                .where(TradePosition.status == PositionStatus.ACTIVE)
+                .options(selectinload(TradePosition.fills))
+            )
+            return result.scalars().all()
+
     async def record_entry(self, symbol: str, side: str, price: float, quantity: float, order_id: str = None):
         """
         Records a new entry or averaging for a position.

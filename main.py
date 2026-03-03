@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.api.webhook import router as webhook_router
 from app.api.config import router as config_router
+from app.api.status import router as status_router
 from app.services.telegram_service import start_bot, stop_bot
 from app.core.logging_config import setup_logging
 from app.db.session import init_db
@@ -39,6 +40,7 @@ app = FastAPI(title="Auto Dev Trade Bot", version="0.1.0", lifespan=lifespan)
 
 app.include_router(webhook_router)
 app.include_router(config_router)
+app.include_router(status_router)
 
 # Mount static files for the Telegram WebApp
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

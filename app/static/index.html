@@ -27,11 +27,7 @@
             gap: 16px;
         }
 
-        h1 {
-            font-size: 1.2rem;
-            margin: 0;
-            text-align: center;
-        }
+        h1 { font-size: 1.2rem; margin: 0; text-align: center; }
 
         .card {
             background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
@@ -44,319 +40,249 @@
         }
 
         .section-header {
-            font-weight: bold;
-            font-size: 1.1rem;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 8px;
-            margin-bottom: 4px;
-        }
-
-        .symbol-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .row {
-            display: flex;
-            gap: 8px;
+            font-weight: bold; font-size: 1.1rem; border-bottom: 1px solid #ccc;
+            padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between;
             align-items: center;
         }
 
-        label {
-            font-size: 0.8rem;
-            color: var(--tg-theme-hint-color, #999999);
-        }
-
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+        .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+        label { font-size: 0.8rem; color: var(--tg-theme-hint-color, #999999); }
+        
         input, select {
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            font-size: 1rem;
-            background-color: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #222222);
+            padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem;
+            background-color: var(--tg-theme-bg-color, #ffffff); color: var(--tg-theme-text-color, #222222);
         }
 
         .status-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: bold;
-            text-transform: uppercase;
+            padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;
         }
-
         .status-active { background-color: #e8f5e9; color: #2e7d32; }
         .status-paused { background-color: #ffebee; color: #c62828; }
         .status-paused_for_entries { background-color: #fff3e0; color: #ef6c00; }
+        
+        .side-long { color: #2e7d32; font-weight: bold; }
+        .side-short { color: #c62828; font-weight: bold; }
 
         .save-btn {
             background-color: var(--tg-theme-button-color, #2481cc);
             color: var(--tg-theme-button-text-color, #ffffff);
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 8px;
+            border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;
         }
 
-        .save-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .add-btn { background-color: #2e7d32; }
 
-        #loading {
-            text-align: center;
-            color: var(--tg-theme-hint-color, #999999);
+        .position-card { border-left: 5px solid #2481cc; background-color: #f9f9f9; }
+        .price { font-family: monospace; font-weight: bold; }
+        .qty { font-weight: bold; }
+        
+        .tab-btn {
+            flex: 1; padding: 10px; border: none; background: none; 
+            color: var(--tg-theme-hint-color); font-weight: bold; border-bottom: 2px solid transparent;
         }
-
-        .error-msg {
-            color: #c62828;
-            font-size: 0.8rem;
-            margin-top: 4px;
-        }
-
-        .testnet-warning {
-            color: #ef6c00;
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
+        .tab-btn.active { color: var(--tg-theme-button-color); border-bottom: 2px solid var(--tg-theme-button-color); }
     </style>
 </head>
 <body>
-    <h1>Trade Bot Settings</h1>
+    <h1>Trade Bot Manager</h1>
+
+    <!-- Tabs (Optional, but let's keep it simple with sections) -->
     
-    <!-- Global Settings -->
-    <div class="card" id="global-settings-card">
-        <div class="section-header">Global Settings</div>
-        <div class="control-group">
-            <label for="exchange-id">Exchange</label>
-            <select id="exchange-id">
-                <option value="okx">OKX</option>
-                <option value="bybit">Bybit</option>
-                <option value="binance">Binance</option>
-            </select>
+    <!-- Active Positions Section -->
+    <div id="active-positions-section">
+        <div class="section-header">
+            <span>🔥 Active Positions</span>
+            <button onclick="fetchActivePositions()" class="save-btn" style="padding: 4px 8px; font-size: 0.7rem;">Refresh</button>
         </div>
-        <div class="control-group">
-            <div class="row">
-                <input type="checkbox" id="use-testnet">
-                <label for="use-testnet" style="color: var(--tg-theme-text-color); font-size: 1rem;">Use Testnet (Sandbox)</label>
-            </div>
-            <div id="testnet-status" class="testnet-warning"></div>
+        <div id="positions-container">
+            <div style="text-align:center; color:gray; padding: 10px;">Loading positions...</div>
         </div>
-        <button class="save-btn" id="save-global-btn" onclick="saveGlobalSettings()">Save Global Settings</button>
     </div>
 
-    <!-- Add Symbol -->
+    <!-- Global Settings Section -->
     <div class="card">
-        <div class="section-header">Add New Symbol</div>
+        <div class="section-header">⚙️ Global Settings</div>
+        <div class="row">
+            <div class="control-group" style="flex: 1;">
+                <label>Exchange</label>
+                <select id="exchange-id" onchange="saveGlobalSettings()">
+                    <option value="bybit">Bybit</option>
+                    <option value="okx">OKX</option>
+                    <option value="binance">Binance</option>
+                </select>
+            </div>
+            <div class="control-group" style="flex: 1;">
+                <label>Trading Mode</label>
+                <select id="use-testnet" onchange="saveGlobalSettings()">
+                    <option value="true">Testnet (Demo)</option>
+                    <option value="false">Mainnet (Real)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Symbol Section -->
+    <div class="card">
+        <div class="section-header">➕ Add New Symbol</div>
         <div class="control-group">
-            <label for="new-symbol">Symbol (e.g. BTCUSDT)</label>
+            <label>Ticker (e.g. BTCUSDT)</label>
             <input type="text" id="new-symbol" placeholder="BTCUSDT">
         </div>
-        <div class="control-group">
-            <label for="new-multiplier">Default Multiplier</label>
-            <input type="number" id="new-multiplier" step="0.1" min="0" value="1.0">
+        <div class="row">
+            <div class="control-group" style="flex: 1;">
+                <label>Multiplier</label>
+                <input type="number" id="new-multiplier" step="0.1" value="1.0">
+            </div>
+            <div class="control-group" style="flex: 1;">
+                <label>Leverage</label>
+                <input type="number" id="new-leverage" step="1" value="1">
+            </div>
         </div>
-        <div class="control-group">
-            <label for="new-leverage">Default Leverage (1-125)</label>
-            <input type="number" id="new-leverage" step="1" min="1" max="125" value="1">
-        </div>
-        <button class="save-btn" onclick="addNewSymbol()">Add Symbol</button>
+        <button onclick="addNewSymbol()" class="save-btn add-btn">Add Ticker to Bot</button>
     </div>
 
-    <div id="loading">Loading configuration...</div>
-    <div id="symbols-container" style="display: none;"></div>
+    <!-- Configured Symbols Section -->
+    <div id="symbols-section">
+        <div class="section-header">📑 Symbol Configs</div>
+        <div id="symbols-container">Loading configurations...</div>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        const symbolsContainer = document.getElementById('symbols-container');
-        const loadingDiv = document.getElementById('loading');
-        const exchangeSelect = document.getElementById('exchange-id');
-        const testnetCheckbox = document.getElementById('use-testnet');
-        const testnetStatus = document.getElementById('testnet-status');
+        async function fetchActivePositions() {
+            try {
+                const response = await fetch('/api/status/active_positions');
+                const positions = await response.json();
+                const container = document.getElementById('positions-container');
+                
+                if (positions.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; color:gray; padding: 20px; border: 1px dashed #ccc; border-radius: 12px;">No active trades being tracked.</div>';
+                    return;
+                }
+
+                container.innerHTML = positions.map(p => `
+                    <div class="card position-card">
+                        <div class="row">
+                            <span style="font-weight:bold; font-size: 1.1rem;">${p.symbol}</span>
+                            <span class="side-${p.side}">${p.side.toUpperCase()}</span>
+                        </div>
+                        <div class="row">
+                            <span>Qty: <span class="qty">${p.quantity}</span></span>
+                            <span>Avg Price: <span class="price">${p.avg_price.toFixed(2)}</span></span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: gray; display: flex; justify-content: space-between; margin-top: 4px;">
+                            <span>Fills: <b>${p.fills_count}</b></span>
+                            <span>Opened: ${new Date(p.entry_time).toLocaleString()}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error("Error fetching positions:", e); }
+        }
 
         async function fetchConfig() {
             try {
                 const response = await fetch('/api/config');
-                if (!response.ok) throw new Error('Failed to fetch config');
                 const config = await response.json();
                 
-                // Update Global Settings UI
-                exchangeSelect.value = config.settings.exchange_id;
-                testnetCheckbox.checked = config.settings.use_testnet;
-                updateTestnetWarning();
+                document.getElementById('exchange-id').value = config.settings.exchange_id;
+                document.getElementById('use-testnet').value = config.settings.use_testnet.toString();
                 
-                renderSymbols(config.symbols);
-            } catch (error) {
-                loadingDiv.innerText = 'Error loading config: ' + error.message;
-            }
-        }
+                const container = document.getElementById('symbols-container');
+                const symbolEntries = Object.entries(config.symbols);
+                
+                if (symbolEntries.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; color:gray;">No tickers configured yet.</div>';
+                    return;
+                }
 
-        function updateTestnetWarning() {
-            if (testnetCheckbox.checked) {
-                testnetStatus.innerText = "⚠️ TRADING ON TESTNET (PAPER MONEY)";
-                testnetStatus.style.color = "#2e7d32";
-            } else {
-                testnetStatus.innerText = "🔥 REAL MONEY TRADING ACTIVE";
-                testnetStatus.style.color = "#c62828";
-            }
-        }
-
-        testnetCheckbox.onchange = updateTestnetWarning;
-
-        function renderSymbols(symbols) {
-            symbolsContainer.innerHTML = '';
-            loadingDiv.style.display = 'none';
-            symbolsContainer.style.display = 'flex';
-            symbolsContainer.style.flexDirection = 'column';
-            symbolsContainer.style.gap = '16px';
-
-            const symbolEntries = Object.entries(symbols);
-            if (symbolEntries.length === 0) {
-                symbolsContainer.innerHTML = '<div style="text-align:center; color:gray;">No symbols configured.</div>';
-                return;
-            }
-
-            for (const [symbol, settings] of symbolEntries) {
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <div class="symbol-header">
-                        <span>${symbol}</span>
-                        <span class="status-badge status-${settings.status}">${settings.status}</span>
+                container.innerHTML = symbolEntries.map(([symbol, s]) => `
+                    <div class="card">
+                        <div class="row">
+                            <span style="font-weight:bold;">${symbol}</span>
+                            <span class="status-badge status-${s.status}">${s.status.replace(/_/g, ' ')}</span>
+                        </div>
+                        <div class="row">
+                            <div class="control-group" style="width: 30%;">
+                                <label>Status</label>
+                                <select id="status-${symbol}" style="padding: 4px; font-size: 0.8rem;">
+                                    <option value="active" ${s.status === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="paused" ${s.status === 'paused' ? 'selected' : ''}>Paused</option>
+                                    <option value="paused_for_entries" ${s.status === 'paused_for_entries' ? 'selected' : ''}>Hold Entry</option>
+                                </select>
+                            </div>
+                            <div class="control-group" style="width: 25%;">
+                                <label>Mult</label>
+                                <input type="number" step="0.1" value="${s.multiplier}" id="m-${symbol}" style="padding: 4px; font-size: 0.8rem;">
+                            </div>
+                            <div class="control-group" style="width: 20%;">
+                                <label>Lev</label>
+                                <input type="number" value="${s.leverage}" id="l-${symbol}" style="padding: 4px; font-size: 0.8rem;">
+                            </div>
+                            <button onclick="saveSymbol('${symbol}')" class="save-btn" style="padding: 6px 12px; font-size: 0.8rem;">Save</button>
+                        </div>
                     </div>
-                    <div class="control-group">
-                        <label for="status-${symbol}">Status</label>
-                        <select id="status-${symbol}" data-symbol="${symbol}" onchange="updateUIStatus('${symbol}')">
-                            <option value="active" ${settings.status === 'active' ? 'selected' : ''}>Active</option>
-                            <option value="paused" ${settings.status === 'paused' ? 'selected' : ''}>Paused</option>
-                            <option value="paused_for_entries" ${settings.status === 'paused_for_entries' ? 'selected' : ''}>Paused for entries</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label for="multiplier-${symbol}">Multiplier</label>
-                        <input type="number" id="multiplier-${symbol}" step="0.1" min="0" value="${settings.multiplier}" data-symbol="${symbol}">
-                    </div>
-                    <div class="control-group">
-                        <label for="leverage-${symbol}">Leverage</label>
-                        <input type="number" id="leverage-${symbol}" step="1" min="1" max="125" value="${settings.leverage || 1}" data-symbol="${symbol}">
-                    </div>
-                    <button class="save-btn" onclick="saveSymbol('${symbol}')">Save Symbol Changes</button>
-                `;
-                symbolsContainer.appendChild(card);
-            }
-        }
-
-        function updateUIStatus(symbol) {
-            const select = document.getElementById(`status-${symbol}`);
-            const badge = select.closest('.card').querySelector('.status-badge');
-            badge.className = `status-badge status-${select.value}`;
-            badge.innerText = select.value;
+                `).join('');
+            } catch (e) { console.error("Error fetching config:", e); }
         }
 
         async function saveGlobalSettings() {
-            const btn = document.getElementById('save-global-btn');
             const data = {
-                exchange_id: exchangeSelect.value,
-                use_testnet: testnetCheckbox.checked
+                exchange_id: document.getElementById('exchange-id').value,
+                use_testnet: document.getElementById('use-testnet').value === "true"
             };
-
-            btn.disabled = true;
-            btn.innerText = 'Saving...';
-
             try {
-                const response = await fetch('/api/config/settings', {
+                await fetch('/api/config/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if (!response.ok) throw new Error('Failed to save settings');
-                alert('Global settings saved! Bot will restart client on next signal.');
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'Save Global Settings';
-            }
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (e) { alert("Save failed: " + e); }
         }
 
         async function addNewSymbol() {
-            const symbolInput = document.getElementById('new-symbol');
-            const multiplierInput = document.getElementById('new-multiplier');
-            const leverageInput = document.getElementById('new-leverage');
-            const symbol = symbolInput.value.trim().toUpperCase();
-            const multiplier = parseFloat(multiplierInput.value);
-            const leverage = parseInt(leverageInput.value);
+            const ticker = document.getElementById('new-symbol').value.trim().toUpperCase();
+            const multiplier = parseFloat(document.getElementById('new-multiplier').value);
+            const leverage = parseInt(document.getElementById('new-leverage').value);
 
-            if (!symbol) {
-                alert('Please enter a symbol');
-                return;
-            }
-            if (isNaN(multiplier) || multiplier < 0) {
-                alert('Multiplier must be a non-negative number');
-                return;
-            }
+            if (!ticker) return alert("Enter Ticker!");
 
             try {
-                const response = await fetch(`/api/config/symbols/${symbol}`, {
+                await fetch(`/api/config/symbols/${ticker}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'active', multiplier: multiplier, leverage: leverage })
+                    body: JSON.stringify({ status: 'active', multiplier, leverage })
                 });
-
-                if (!response.ok) throw new Error('Failed to add symbol');
-                
-                symbolInput.value = '';
-                await fetchConfig();
-            } catch (error) {
-                alert('Error adding symbol: ' + error.message);
-            }
+                document.getElementById('new-symbol').value = '';
+                fetchConfig();
+                tg.HapticFeedback.impactOccurred('medium');
+            } catch (e) { alert("Add failed: " + e); }
         }
 
         async function saveSymbol(symbol) {
-            const status = document.getElementById(`status-${symbol}`).value;
-            const multiplier = parseFloat(document.getElementById(`multiplier-${symbol}`).value);
-            const leverage = parseInt(document.getElementById(`leverage-${symbol}`).value);
-            const btn = document.querySelector(`button[onclick="saveSymbol('${symbol}')"]`);
-
-            if (isNaN(multiplier) || multiplier < 0) {
-                alert('Multiplier must be a non-negative number');
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = 'Saving...';
-
+            const data = {
+                status: document.getElementById(`status-${symbol}`).value,
+                multiplier: parseFloat(document.getElementById(`m-${symbol}`).value),
+                leverage: parseInt(document.getElementById(`l-${symbol}`).value)
+            };
             try {
-                const response = await fetch(`/api/config/symbols/${symbol}`, {
+                await fetch(`/api/config/symbols/${symbol}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status, multiplier, leverage })
+                    body: JSON.stringify(data)
                 });
-
-                if (!response.ok) throw new Error('Update failed');
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'Save Symbol Changes';
-            }
+                fetchConfig();
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (e) { alert("Update failed: " + e); }
         }
 
-        // Initialize
+        // Initial load
+        fetchActivePositions();
         fetchConfig();
+        // Auto refresh positions every 15s for more "live" feel
+        setInterval(fetchActivePositions, 15000);
     </script>
 </body>
 </html>

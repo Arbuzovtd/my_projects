@@ -19,7 +19,13 @@ async def cmd_start(message: types.Message):
     Handle /start command. Sends a welcome message and a button to open the Web App.
     """
     logger.info(f"User {message.from_user.id} in chat {message.chat.id} started the bot.")
-    webapp_url = f"{settings.WEBAPP_URL}/static/index.html"
+    # Build robust URL
+    base_url = settings.WEBAPP_URL.rstrip('/')
+    if not base_url.endswith('/static/index.html'):
+        webapp_url = f"{base_url}/static/index.html"
+    else:
+        webapp_url = base_url
+
     builder = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📊 Открыть панель управления", web_app=WebAppInfo(url=webapp_url))]
@@ -34,6 +40,19 @@ async def cmd_start(message: types.Message):
         f"Нажми кнопку ниже, чтобы управлять настройками через Web App.\n"
     )
     await message.answer(welcome_text, reply_markup=builder, parse_mode="HTML")
+
+@dp.message(Command("debug"))
+async def cmd_debug(message: types.Message):
+    """
+    Debug command to check current settings.
+    """
+    debug_info = (
+        f"🛠 <b>Debug Info:</b>\n"
+        f"WEBAPP_URL: {hcode(settings.WEBAPP_URL)}\n"
+        f"EXCHANGE: {hcode(settings.EXCHANGE_ID)}\n"
+        f"TESTNET: {hcode(str(settings.USE_TESTNET))}\n"
+    )
+    await message.answer(debug_info, parse_mode="HTML")
 
 async def send_message(text: str, chat_id: str = None):
     """
