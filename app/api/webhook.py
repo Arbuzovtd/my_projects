@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 async def receive_webhook(signal: WebhookSignal):
     logger.info(f"Received webhook signal: {signal.model_dump_json()}")
     
-    # Passphrase check is DISABLED for this test session
-    # if signal.passphrase != settings.WEBHOOK_PASSPHRASE:
-    #     logger.warning(f"Unauthorized access attempt with invalid passphrase for {signal.ticker}")
-    #     raise HTTPException(status_code=401, detail="Invalid passphrase")
+    # Passphrase check
+    if signal.passphrase != settings.WEBHOOK_PASSPHRASE:
+        logger.warning(f"Unauthorized access attempt with invalid passphrase for {signal.ticker}")
+        raise HTTPException(status_code=401, detail="Invalid passphrase")
     
-    logger.info(f"PROCESSING SIGNAL: {signal.action} for {signal.ticker} (security check skipped)")
+    logger.info(f"PROCESSING SIGNAL: {signal.action} for {signal.ticker}")
     result = await smart_sync_service.process_signal(signal)
     
     if result.get("status") == "error":

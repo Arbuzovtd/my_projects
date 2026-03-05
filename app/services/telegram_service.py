@@ -12,13 +12,15 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 
-from aiogram.types import WebAppInfo, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     """
-    Handle /start command. Sends a welcome message and a button to open the Web App.
+    Handle /start command. Sends a welcome message and an INLINE button to open the Web App.
     """
     logger.info(f"User {message.from_user.id} in chat {message.chat.id} started the bot.")
+
     # Build robust URL
     base_url = settings.WEBAPP_URL.rstrip('/')
     if not base_url.endswith('/static/index.html'):
@@ -26,11 +28,11 @@ async def cmd_start(message: types.Message):
     else:
         webapp_url = base_url
 
-    builder = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📊 Открыть панель управления", web_app=WebAppInfo(url=webapp_url))]
-        ],
-        resize_keyboard=True
+    # Use InlineKeyboardMarkup for better initData transmission
+    builder = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📊 Открыть панель управления", web_app=WebAppInfo(url=webapp_url))]
+        ]
     )
 
     welcome_text = (
@@ -40,6 +42,7 @@ async def cmd_start(message: types.Message):
         f"Нажми кнопку ниже, чтобы управлять настройками через Web App.\n"
     )
     await message.answer(welcome_text, reply_markup=builder, parse_mode="HTML")
+
 
 @dp.message(Command("debug"))
 async def cmd_debug(message: types.Message):
@@ -56,19 +59,28 @@ async def cmd_debug(message: types.Message):
 
 async def send_message(text: str, chat_id: str = None):
     """
-    Send a message to a specific chat or the default chat from settings.
+    Send a message to one or more chats. 
+    If chat_id is provided, sends only to that chat.
+    Otherwise, sends to all IDs defined in settings.TELEGRAM_CHAT_ID (comma-separated).
     """
-    target_chat_id = chat_id or settings.TELEGRAM_CHAT_ID
-    if not target_chat_id:
+    if chat_id:
+        target_ids = [chat_id.strip()]
+    elif settings.TELEGRAM_CHAT_ID:
+        # Split by comma and remove spaces/empty strings
+        target_ids = [id.strip() for id in settings.TELEGRAM_CHAT_ID.split(",") if id.strip()]
+    else:
         logger.warning("No TELEGRAM_CHAT_ID provided or set in settings. Cannot send message.")
         return False
 
-    try:
-        await bot.send_message(target_chat_id, text, parse_mode="HTML")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send telegram message: {e}")
-        return False
+    success = True
+    for target_id in target_ids:
+        try:
+            await bot.send_message(target_id, text, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"Failed to send telegram message to {target_id}: {e}")
+            success = False
+    
+    return success
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):

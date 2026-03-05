@@ -3,9 +3,11 @@ from typing import Dict
 from app.models.config import AppConfig, SymbolConfig, GlobalSettings
 from app.services.config_service import config_service
 
-router = APIRouter(prefix="/api/config", tags=["config"])
+from app.core.security import verify_telegram_webapp_data
 
-@router.get("/", response_model=AppConfig)
+router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(verify_telegram_webapp_data)])
+
+@router.get("", response_model=AppConfig)
 async def get_full_config():
     """
     Returns the full application configuration.

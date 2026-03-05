@@ -1,15 +1,14 @@
 services:
   trading-bot:
-    build: .
+    image: timurarbuzov/trading-bot:latest
     container_name: trading-bot
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "${APP_PORT:-8000}:8000"
+    # Бот доступен только внутри сети Docker для Caddy
+    expose:
+      - "8000"
     volumes:
-      # We mount only persistent data files. 
-      # Code is already inside the image thanks to COPY . . in Dockerfile.
       - ./config.json:/app/config.json
       - ./config.db:/app/config.db
       - ./bot.log:/app/bot.log
@@ -18,3 +17,19 @@ services:
       options:
         max-size: "10mb"
         max-file: "3"
+
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -124,6 +124,16 @@ class ExchangeService:
             logger.error(f"CCXT {self.exchange_id} API Error fetching positions: {e}")
             return {"retCode": -1, "retMsg": str(e)}
 
+    async def get_balance(self):
+        client = await self._get_client()
+        try:
+            # For Unified accounts on Bybit/OKX, we usually want the 'total' or 'USDT' balance
+            balance = await client.fetch_balance()
+            return {"retCode": 0, "result": balance}
+        except Exception as e:
+            logger.error(f"CCXT {self.exchange_id} API Error fetching balance: {e}")
+            return {"retCode": -1, "retMsg": str(e)}
+
     def _map_symbol(self, symbol: str) -> str:
         """
         Maps simple symbols like 'BTCUSDT' to CCXT format.

@@ -101,6 +101,22 @@
 
     <!-- Global Settings Section -->
     <div class="card">
+        <div class="section-header">💰 Account Balance</div>
+        <div class="row" style="text-align: center;">
+            <div style="flex: 1;">
+                <label>Total Balance</label>
+                <div id="balance-total" class="price" style="font-size: 1.2rem;">0.00 USDT</div>
+            </div>
+            <div style="flex: 1;">
+                <label>Available</label>
+                <div id="balance-free" class="price" style="font-size: 1.2rem;">0.00 USDT</div>
+            </div>
+        </div>
+        <div id="balance-error" style="color: red; font-size: 0.7rem; text-align: center;"></div>
+    </div>
+
+    <!-- Global Settings Section -->
+    <div class="card">
         <div class="section-header">⚙️ Global Settings</div>
         <div class="row">
             <div class="control-group" style="flex: 1;">
@@ -149,11 +165,68 @@
 
     <script>
         const tg = window.Telegram.WebApp;
+        
+        // Tell Telegram we are ready
+        tg.ready();
         tg.expand();
+        
+        // Helper for authorized fetches
+        async function authFetch(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            
+            // Check if initData exists
+            if (!tg.initData) {
+                console.warn("No Telegram initData found. If you are in a browser, this is expected.");
+            }
+            
+            options.headers['X-TG-Data'] = tg.initData || "";
+            
+            try {
+                const response = await fetch(url, options);
+                
+                if (response.status === 401 || response.status === 403) {
+                    const errorId = tg.initDataUnsafe.user?.id || 'Unknown';
+                    const platform = tg.platform || 'browser';
+                    document.body.innerHTML = `
+                        <div style="text-align:center; padding: 50px; color: #ff3b30; font-family: sans-serif;">
+                            <h2 style="margin-bottom: 10px;">⛔ Access Denied</h2>
+                            <p style="color: gray;">Telegram did not provide authorization data.</p>
+                            <div style="margin: 20px auto; max-width: 250px; font-family: monospace; font-size: 0.8rem; background: #f0f0f0; padding: 15px; border-radius: 12px; text-align: left;">
+                                <b>User ID:</b> ${errorId}<br>
+                                <b>Platform:</b> ${platform}<br>
+                                <b>Has Data:</b> ${tg.initData ? 'Yes' : 'No'}<br>
+                                <b>Version:</b> ${tg.version}
+                            </div>
+                            <p style="margin-top: 20px; font-size: 0.8rem;"><b>Try this:</b> Close the app, type <code>/start</code> again, and use the NEW button.</p>
+                        </div>`;
+                    throw new Error("Unauthorized");
+                }
+                return response;
+            } catch (e) {
+                if (e.message !== "Unauthorized") {
+                    console.error("Fetch error:", e);
+                }
+                throw e;
+            }
+        }
+
+        async function fetchBalance() {
+            try {
+                const response = await authFetch('/api/status/balance');
+                const data = await response.json();
+                if (data.error) {
+                    document.getElementById('balance-error').innerText = data.error;
+                    return;
+                }
+                document.getElementById('balance-total').innerText = data.total.toFixed(2) + " USDT";
+                document.getElementById('balance-free').innerText = data.free.toFixed(2) + " USDT";
+                document.getElementById('balance-error').innerText = '';
+            } catch (e) { console.error("Error fetching balance:", e); }
+        }
 
         async function fetchActivePositions() {
             try {
-                const response = await fetch('/api/status/active_positions');
+                const response = await authFetch('/api/status/active_positions');
                 const positions = await response.json();
                 const container = document.getElementById('positions-container');
                 
@@ -183,7 +256,7 @@
 
         async function fetchConfig() {
             try {
-                const response = await fetch('/api/config');
+                const response = await authFetch('/api/config');
                 const config = await response.json();
                 
                 document.getElementById('exchange-id').value = config.settings.exchange_id;
@@ -233,7 +306,7 @@
                 use_testnet: document.getElementById('use-testnet').value === "true"
             };
             try {
-                await fetch('/api/config/settings', {
+                await authFetch('/api/config/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -250,14 +323,18 @@
             if (!ticker) return alert("Enter Ticker!");
 
             try {
-                await fetch(`/api/config/symbols/${ticker}`, {
+                const response = await authFetch(`/api/config/symbols/${ticker}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'active', multiplier, leverage })
                 });
-                document.getElementById('new-symbol').value = '';
-                fetchConfig();
-                tg.HapticFeedback.impactOccurred('medium');
+                if (response.ok) {
+                    document.getElementById('new-symbol').value = '';
+                    fetchConfig(); // Refresh list
+                    tg.HapticFeedback.impactOccurred('medium');
+                } else {
+                    alert("Error adding symbol!");
+                }
             } catch (e) { alert("Add failed: " + e); }
         }
 
@@ -268,21 +345,27 @@
                 leverage: parseInt(document.getElementById(`l-${symbol}`).value)
             };
             try {
-                await fetch(`/api/config/symbols/${symbol}`, {
+                const response = await authFetch(`/api/config/symbols/${symbol}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                fetchConfig();
-                tg.HapticFeedback.notificationOccurred('success');
+                if (response.ok) {
+                    fetchConfig(); // Refresh UI
+                    tg.HapticFeedback.notificationOccurred('success');
+                }
             } catch (e) { alert("Update failed: " + e); }
         }
 
         // Initial load
+        fetchBalance();
         fetchActivePositions();
         fetchConfig();
-        // Auto refresh positions every 15s for more "live" feel
-        setInterval(fetchActivePositions, 15000);
+        // Auto refresh positions and balance every 15s for more "live" feel
+        setInterval(() => {
+            fetchActivePositions();
+            fetchBalance();
+        }, 15000);
     </script>
 </body>
 </html>
