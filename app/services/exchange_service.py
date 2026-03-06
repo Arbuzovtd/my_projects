@@ -10,6 +10,8 @@ class ExchangeService:
         self.exchange_id = None
         self.use_testnet = None
         self.client = None
+        self._balance_cache = None
+        self._balance_cache_time = 0
 
     async def _get_client(self):
         """
@@ -125,10 +127,17 @@ class ExchangeService:
             return {"retCode": -1, "retMsg": str(e)}
 
     async def get_balance(self):
+        import time
+        # Return cache if it's fresh (10 seconds)
+        if self._balance_cache and (time.time() - self._balance_cache_time < 10):
+            return {"retCode": 0, "result": self._balance_cache}
+
         client = await self._get_client()
         try:
             # For Unified accounts on Bybit/OKX, we usually want the 'total' or 'USDT' balance
             balance = await client.fetch_balance()
+            self._balance_cache = balance
+            self._balance_cache_time = time.time()
             return {"retCode": 0, "result": balance}
         except Exception as e:
             logger.error(f"CCXT {self.exchange_id} API Error fetching balance: {e}")

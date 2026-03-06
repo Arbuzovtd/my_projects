@@ -91,8 +91,6 @@ class SmartSyncService:
         if not position:
             msg = f"ℹ️ No active position for {symbol} found in DB. Nothing to close."
             logger.info(msg)
-            # Optional: Fallback to exchange check if you want to be extra sure
-            # But according to user request, we want to avoid "close all" by mistake.
             return {"status": "success", "message": "No tracked position found"}
 
         # 2. Match signal side to position side
@@ -100,16 +98,30 @@ class SmartSyncService:
             logger.warning(f"Close signal for {signal.side} but DB says position is {position.side}. Ignoring.")
             return {"status": "ignored", "reason": "Side mismatch"}
 
-        # 3. Close the tracked quantity
-        close_side = "sell" if position.side == "long" else "buy"
-        pos_size = position.total_quantity
+        # 3. Determine quantity to close
+        config = await config_service.get_config()
+        symbol_config = config.symbols.get(symbol)
+        multiplier = symbol_config.multiplier if symbol_config else 1.0
         
-        logger.info(f"CCXT: Closing tracked position for {symbol}: {position.side} {pos_size}")
+        # If signal.qty > 0, it's a partial close
+        if signal.qty > 0:
+            close_qty = signal.qty * multiplier
+            # Don't try to close more than we have in DB
+            close_qty = min(close_qty, position.total_quantity)
+            is_partial = close_qty < position.total_quantity
+        else:
+            # Full close
+            close_qty = position.total_quantity
+            is_partial = False
+        
+        close_side = "sell" if position.side == "long" else "buy"
+        
+        logger.info(f"CCXT: Closing {'partial ' if is_partial else ''}tracked position for {symbol}: {position.side} qty={close_qty}")
         
         resp = await exchange_service.create_market_order(
             symbol=symbol,
             side=close_side,
-            amount=pos_size,
+            amount=close_qty,
             params={"reduceOnly": True, "recvWindow": 60000}
         )
         
@@ -125,12 +137,14 @@ class SmartSyncService:
             closed_pos = await trade_service.record_close(
                 symbol=symbol,
                 exit_price=exit_price,
-                exit_reason="exit_signal"
+                exit_reason="exit_signal",
+                quantity=close_qty
             )
             
-            pnl_msg = f" (PnL: {closed_pos.total_pnl_usdt:.2f} USDT)" if closed_pos else ""
-            await send_message(f"✅ Position closed for {symbol}: {position.side} {pos_size} @ {exit_price}{pnl_msg}")
-            return {"status": "success", "pnl": closed_pos.total_pnl_usdt if closed_pos else 0}
+            msg_type = "Partially closed" if is_partial else "Fully closed"
+            pnl_val = (exit_price - position.average_entry_price) * close_qty * (1 if position.side == "long" else -1)
+            await send_message(f"✅ {msg_type} for {symbol}: {position.side} {close_qty} @ {exit_price} (PnL: {pnl_val:.2f} USDT)")
+            return {"status": "success", "pnl": pnl_val}
         else:
             reason = resp.get("retMsg")
             logger.error(f"❌ Failed to close {position.side} position for {symbol}: {reason}")

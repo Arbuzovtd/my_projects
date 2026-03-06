@@ -81,9 +81,10 @@ class TradeService:
             await session.commit()
             return position
 
-    async def record_close(self, symbol: str, exit_price: float, exit_reason: str = "exit_signal"):
+    async def record_close(self, symbol: str, exit_price: float, exit_reason: str = "exit_signal", quantity: float = None):
         """
-        Closes the active position and calculates final PnL.
+        Closes the active position (fully or partially) and calculates PnL for the closed part.
+        If quantity is None, closes the entire position.
         """
         async with async_session() as session:
             async with session.begin():
@@ -97,19 +98,39 @@ class TradeService:
                     logger.warning(f"DB: No active position found to close for {symbol}")
                     return None
                 
-                # Calculate PnL
-                # Long: (Exit - Entry) * Qty
-                # Short: (Entry - Exit) * Qty
+                close_qty = quantity if quantity is not None and quantity > 0 else position.total_quantity
+                # Ensure we don't close more than we have
+                close_qty = min(close_qty, position.total_quantity)
+                
+                # Calculate PnL for the closed part
                 multiplier = 1 if position.side == "long" else -1
-                pnl = (exit_price - position.average_entry_price) * position.total_quantity * multiplier
+                pnl = (exit_price - position.average_entry_price) * close_qty * multiplier
                 
-                position.status = PositionStatus.CLOSED
-                position.exit_price = exit_price
-                position.exit_time = datetime.utcnow()
-                position.total_pnl_usdt = pnl
-                position.exit_reason = exit_reason
-                
-                logger.info(f"DB: Closed {position.side} position for {symbol}. PnL: {pnl:.2f} USDT")
+                # Record the exit fill
+                fill = TradeFill(
+                    position_id=position.id,
+                    symbol=symbol,
+                    side="sell" if position.side == "long" else "buy",
+                    price=exit_price,
+                    quantity=close_qty,
+                    order_id=None # Will be updated if available
+                )
+                session.add(fill)
+
+                if close_qty >= position.total_quantity:
+                    # Full close
+                    position.status = PositionStatus.CLOSED
+                    position.exit_price = exit_price
+                    position.exit_time = datetime.utcnow()
+                    position.total_pnl_usdt = (position.total_pnl_usdt or 0) + pnl
+                    position.total_quantity = 0
+                    position.exit_reason = exit_reason
+                    logger.info(f"DB: Fully closed {position.side} position for {symbol}. PnL: {pnl:.2f} USDT")
+                else:
+                    # Partial close
+                    position.total_quantity -= close_qty
+                    position.total_pnl_usdt = (position.total_pnl_usdt or 0) + pnl
+                    logger.info(f"DB: Partially closed {position.side} position for {symbol}: qty={close_qty}, remaining={position.total_quantity}, PnL: {pnl:.2f} USDT")
                 
             await session.commit()
             return position

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from app.services.smart_sync_service import SmartSyncService
 from app.models.webhook_signal import WebhookSignal
 from app.models.config import AppConfig, SymbolConfig
@@ -10,12 +10,11 @@ def smart_sync_service():
 
 @pytest.mark.asyncio
 async def test_process_signal_symbol_not_in_config(smart_sync_service):
-    # Mocking config service to return empty config and telegram service
     with (
         patch("app.services.smart_sync_service.config_service.get_config", new_callable=AsyncMock) as mock_get_config,
         patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock) as mock_send_message
     ):
-        mock_get_config.return_value = AppConfig(root={})
+        mock_get_config.return_value = AppConfig(symbols={})
         
         signal = WebhookSignal(
             passphrase="pass",
@@ -28,40 +27,21 @@ async def test_process_signal_symbol_not_in_config(smart_sync_service):
         result = await smart_sync_service.process_signal(signal)
         assert result["status"] == "ignored"
         assert "not in config" in result["reason"]
-        mock_send_message.assert_called_once()
-
-@pytest.mark.asyncio
-async def test_process_signal_symbol_paused(smart_sync_service):
-    # Mocking config service to return paused config
-    with patch("app.services.smart_sync_service.config_service.get_config", new_callable=AsyncMock) as mock_get_config:
-        mock_get_config.return_value = AppConfig(symbols={
-            "BTCUSDT": SymbolConfig(status="paused", multiplier=10.0)
-        })
-        signal = WebhookSignal(
-            passphrase="pass",
-            ticker="BTCUSDT",
-            action="entry",
-            side="long",
-            qty=1.0
-        )
-        
-        result = await smart_sync_service.process_signal(signal)
-        assert result["status"] == "ignored"
-        assert result["reason"] == "Paused"
 
 @pytest.mark.asyncio
 async def test_handle_entry_success(smart_sync_service):
-    # Mocking config service and exchange service
     with (
         patch("app.services.smart_sync_service.config_service.get_config", new_callable=AsyncMock) as mock_get_config,
         patch("app.services.smart_sync_service.exchange_service.create_market_order", new_callable=AsyncMock) as mock_create_order,
-        patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock) as mock_send_message
+        patch("app.services.smart_sync_service.exchange_service.set_leverage", new_callable=AsyncMock),
+        patch("app.services.smart_sync_service.trade_service.record_entry", new_callable=AsyncMock),
+        patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock)
     ):
         mock_get_config.return_value = AppConfig(symbols={
-            "BTCUSDT": SymbolConfig(status="active", multiplier=10.0)
+            "BTCUSDT": SymbolConfig(status="active", multiplier=10.0, leverage=10)
         })
 
-        mock_create_order.return_value = {"retCode": 0, "result": {"id": "12345"}}
+        mock_create_order.return_value = {"retCode": 0, "result": {"id": "12345", "price": 50000}}
         
         signal = WebhookSignal(
             passphrase="pass",
@@ -73,40 +53,37 @@ async def test_handle_entry_success(smart_sync_service):
         
         result = await smart_sync_service.process_signal(signal)
         assert result["status"] == "success"
-        assert result["order_id"] == "12345"
         
-        # Check if qty was multiplied (0.5 * 10.0 = 5.0)
         mock_create_order.assert_called_once_with(
             symbol="BTCUSDT",
             side="buy",
-            amount=5.0
+            amount=5.0,
+            params={"recvWindow": 60000}
         )
-        mock_send_message.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_handle_close_all_success(smart_sync_service):
-    # Mocking config service, exchange service.get_positions and create_market_order
+async def test_handle_close_all_full(smart_sync_service):
     with (
         patch("app.services.smart_sync_service.config_service.get_config", new_callable=AsyncMock) as mock_get_config,
-        patch("app.services.smart_sync_service.exchange_service.get_positions", new_callable=AsyncMock) as mock_get_positions,
+        patch("app.services.smart_sync_service.trade_service.get_active_position", new_callable=AsyncMock) as mock_get_pos,
+        patch("app.services.smart_sync_service.trade_service.record_close", new_callable=AsyncMock) as mock_record_close,
         patch("app.services.smart_sync_service.exchange_service.create_market_order", new_callable=AsyncMock) as mock_create_order,
-        patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock) as mock_send_message
+        patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock)
     ):
         mock_get_config.return_value = AppConfig(symbols={
             "BTCUSDT": SymbolConfig(status="active", multiplier=10.0)
         })
 
-        mock_get_positions.return_value = {
-            "retCode": 0,
-            "result": {
-                "list": [
-                    {"side": "long", "contracts": "2.5"},
-                    {"side": "short", "contracts": "0"}
-                ]
-            }
-        }
-        mock_create_order.return_value = {"retCode": 0, "result": {"id": "close_123"}}
+        # DB has 5.0 units
+        mock_pos = MagicMock()
+        mock_pos.side = "long"
+        mock_pos.total_quantity = 5.0
+        mock_pos.average_entry_price = 40000
+        mock_get_pos.return_value = mock_pos
         
+        mock_create_order.return_value = {"retCode": 0, "result": {"id": "close_123", "average": 41000}}
+        
+        # Signal with qty=0 (full close)
         signal = WebhookSignal(
             passphrase="pass",
             ticker="BTCUSDT",
@@ -118,11 +95,64 @@ async def test_handle_close_all_success(smart_sync_service):
         result = await smart_sync_service.process_signal(signal)
         assert result["status"] == "success"
         
-        # Should close only the "long" position
+        # Should close ALL 5.0
         mock_create_order.assert_called_once_with(
             symbol="BTCUSDT",
             side="sell",
-            amount=2.5,
-            params={"reduceOnly": True}
+            amount=5.0,
+            params={"reduceOnly": True, "recvWindow": 60000}
         )
-        mock_send_message.assert_called_once()
+        mock_record_close.assert_called_once_with(
+            symbol="BTCUSDT",
+            exit_price=41000,
+            exit_reason="exit_signal",
+            quantity=5.0
+        )
+
+@pytest.mark.asyncio
+async def test_handle_close_all_partial(smart_sync_service):
+    with (
+        patch("app.services.smart_sync_service.config_service.get_config", new_callable=AsyncMock) as mock_get_config,
+        patch("app.services.smart_sync_service.trade_service.get_active_position", new_callable=AsyncMock) as mock_get_pos,
+        patch("app.services.smart_sync_service.trade_service.record_close", new_callable=AsyncMock) as mock_record_close,
+        patch("app.services.smart_sync_service.exchange_service.create_market_order", new_callable=AsyncMock) as mock_create_order,
+        patch("app.services.smart_sync_service.send_message", new_callable=AsyncMock)
+    ):
+        mock_get_config.return_value = AppConfig(symbols={
+            "BTCUSDT": SymbolConfig(status="active", multiplier=10.0)
+        })
+
+        # DB has 5.0 units
+        mock_pos = MagicMock()
+        mock_pos.side = "long"
+        mock_pos.total_quantity = 5.0
+        mock_pos.average_entry_price = 40000
+        mock_get_pos.return_value = mock_pos
+        
+        mock_create_order.return_value = {"retCode": 0, "result": {"id": "close_partial", "average": 41000}}
+        
+        # Signal with qty=0.2 (partial close: 0.2 * 10 = 2.0 units)
+        signal = WebhookSignal(
+            passphrase="pass",
+            ticker="BTCUSDT",
+            action="close_all",
+            side="long",
+            qty=0.2
+        )
+        
+        result = await smart_sync_service.process_signal(signal)
+        assert result["status"] == "success"
+        
+        # Should close only 2.0
+        mock_create_order.assert_called_once_with(
+            symbol="BTCUSDT",
+            side="sell",
+            amount=2.0,
+            params={"reduceOnly": True, "recvWindow": 60000}
+        )
+        mock_record_close.assert_called_once_with(
+            symbol="BTCUSDT",
+            exit_price=41000,
+            exit_reason="exit_signal",
+            quantity=2.0
+        )

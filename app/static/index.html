@@ -357,10 +357,33 @@
             } catch (e) { alert("Update failed: " + e); }
         }
 
-        // Initial load
-        fetchBalance();
-        fetchActivePositions();
-        fetchConfig();
+        // Initial load with Promise.all for speed
+        async function initApp() {
+            console.log("Initializing app...");
+            try {
+                // Show loading states
+                document.getElementById('balance-error').innerText = "Updating...";
+                
+                // Fire all requests in parallel
+                await Promise.allSettled([
+                    fetchBalance(),
+                    fetchActivePositions(),
+                    fetchConfig()
+                ]);
+                
+                console.log("Initial data loaded.");
+            } catch (e) {
+                console.error("Initialization error:", e);
+            }
+        }
+
+        // Wait for Telegram to be fully ready
+        tg.ready();
+        tg.expand();
+        
+        // Start initialization
+        initApp();
+
         // Auto refresh positions and balance every 15s for more "live" feel
         setInterval(() => {
             fetchActivePositions();
