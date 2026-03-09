@@ -1,9 +1,9 @@
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+**/.Python
 env/
 build/
 develop-eggs/
@@ -22,19 +22,19 @@ wheels/
 *.egg
 
 # Virtual Environment
-.venv/
+**/.venv/
 venv/
 ENV/
 
 # Env & Secrets
-.env
-.env.local
-.env.*
+**/.env
+**/.env.local
+**/.env.*
 
 # Project specific
-config.json
-logs/
-*.log
+**/config.json
+**/logs/
+**/*.log
 
 # IDE
 .vscode/
@@ -47,12 +47,12 @@ logs/
 Thumbs.db
 
 # Custom Data and Strategy files
-config.db
-*.db
-СТРАТА MR LAST_без TF.txt
+**/config.db
+**/*.db
+**/*СТРАТА MR LAST_без TF.txt
 
 # Local dev files
-*progress.txt
-tasks.json
-docker-compose.txt
-
+**/progress.txt
+**/tasks.json
+**/docker-compose.txt
+**/bot.log
