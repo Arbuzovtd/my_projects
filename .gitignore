@@ -45,3 +45,14 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Custom Data and Strategy files
+config.db
+*.db
+СТРАТА MR LAST_без TF.txt
+
+# Local dev files
+*progress.txt
+tasks.json
+docker-compose.txt
+
