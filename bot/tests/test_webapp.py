@@ -2,8 +2,15 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 from app.services.config_service import config_service
+from app.core.security import verify_telegram_webapp_data
 import os
 import json
+
+# Mock the Telegram authentication dependency
+async def override_verify_telegram_webapp_data():
+    return "12345" # Mock user ID
+
+app.dependency_overrides[verify_telegram_webapp_data] = override_verify_telegram_webapp_data
 
 client = TestClient(app)
 
@@ -41,13 +48,13 @@ def test_static_index_exists():
     """
     response = client.get("/static/index.html")
     assert response.status_code == 200
-    assert "Trade Bot Settings" in response.text
+    assert "Trade Bot Manager" in response.text
 
 def test_get_config_api(temp_config_file):
     """
     Tests the GET /api/config endpoint.
     """
-    response = client.get("/api/config/")
+    response = client.get("/api/config")
     assert response.status_code == 200
     data = response.json()
     assert "symbols" in data
